@@ -36,7 +36,7 @@ FetchContent_Declare(
     GIT_TAG 3.3.8
 )
 
-FetchContent_MakeAvailable(cli11 imgui glfw)
+FetchContent_MakeAvailable(cli11)
 
 # 链接依赖
 target_link_libraries(cli11_gui INTERFACE CLI11::CLI11)
