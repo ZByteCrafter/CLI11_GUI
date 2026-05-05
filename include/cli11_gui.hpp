@@ -153,6 +153,45 @@ inline bool has_command_line_args(int argc, char** argv) {
     return argc > 1;
 }
 
+// 控件生成器
+class ControlGenerator {
+public:
+    explicit ControlGenerator(const CLI::App& app, Config& config);
+
+    // 渲染所有控件
+    void render();
+
+    // 获取收集的参数
+    std::vector<std::string> get_args() const;
+
+private:
+    // 渲染单个选项
+    void render_option(const CLI::Option* option);
+
+    // 渲染标志
+    void render_flag(const CLI::Option* option);
+
+    // 渲染文本输入
+    void render_text_input(const CLI::Option* option);
+
+    // 渲染数字输入
+    void render_number_input(const CLI::Option* option);
+
+    // 渲染复选框
+    void render_checkbox(const CLI::Option* option);
+
+    // 渲染滑块
+    void render_slider(const CLI::Option* option);
+
+    // 渲染下拉框
+    void render_dropdown(const CLI::Option* option);
+
+    const CLI::App& app_;
+    Config& config_;
+    std::map<std::string, std::string> values_;
+    std::map<std::string, bool> flags_;
+};
+
 } // namespace detail
 
 // Forward declarations for run API
@@ -196,6 +235,7 @@ private:
     bool initialized_ = false;
     bool should_run_ = false;
     std::vector<std::string> args_;
+    std::unique_ptr<detail::ControlGenerator> control_generator_;
 };
 
 // Run API (implemented at end of file after GUI class)
@@ -241,6 +281,154 @@ inline void reset_state() {
 inline bool has_state() {
     // TODO: Implement state check
     return false;
+}
+
+// ControlGenerator implementation
+detail::ControlGenerator::ControlGenerator(const CLI::App& app, Config& config)
+    : app_(app), config_(config) {
+    // 初始化默认值
+    for (const auto& option : app.get_options()) {
+        if (option->get_expected() == 0) {
+            // 标志
+            flags_[option->get_name()] = false;
+        } else {
+            // 选项
+            auto default_val = option->get_default_str();
+            if (!default_val.empty()) {
+                values_[option->get_name()] = default_val;
+            }
+        }
+    }
+}
+
+void detail::ControlGenerator::render() {
+    for (const auto& option : app_.get_options()) {
+        render_option(option);
+    }
+}
+
+void detail::ControlGenerator::render_option(const CLI::Option* option) {
+    // 跳过帮助选项
+    if (option->get_name() == "--help" || option->get_name() == "-h") {
+        return;
+    }
+
+    // 根据类型渲染
+    if (option->get_expected() == 0) {
+        render_flag(option);
+    } else {
+        // 根据值类型选择控件
+        auto type_name = option->get_type_name();
+
+        if (type_name == "int" || type_name == "float" || type_name == "double") {
+            render_number_input(option);
+        } else if (type_name == "bool") {
+            render_checkbox(option);
+        } else {
+            render_text_input(option);
+        }
+    }
+}
+
+void detail::ControlGenerator::render_flag(const CLI::Option* option) {
+    auto name = option->get_name();
+    bool value = flags_[name];
+
+    if (ImGui::Checkbox(name.c_str(), &value)) {
+        flags_[name] = value;
+    }
+
+    // 显示帮助
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s", option->get_description().c_str());
+    }
+}
+
+void detail::ControlGenerator::render_text_input(const CLI::Option* option) {
+    auto name = option->get_name();
+    auto& value = values_[name];
+
+    char buffer[256];
+    strncpy_s(buffer, value.c_str(), sizeof(buffer) - 1);
+
+    if (ImGui::InputText(name.c_str(), buffer, sizeof(buffer))) {
+        value = buffer;
+    }
+
+    // 显示帮助
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s", option->get_description().c_str());
+    }
+}
+
+void detail::ControlGenerator::render_number_input(const CLI::Option* option) {
+    auto name = option->get_name();
+    auto& value = values_[name];
+
+    // 尝试解析为数字
+    try {
+        if (option->get_type_name() == "int") {
+            int int_val = std::stoi(value);
+            if (ImGui::InputInt(name.c_str(), &int_val)) {
+                value = std::to_string(int_val);
+            }
+        } else {
+            float float_val = std::stof(value);
+            if (ImGui::InputFloat(name.c_str(), &float_val)) {
+                value = std::to_string(float_val);
+            }
+        }
+    } catch (...) {
+        // 回退到文本输入
+        render_text_input(option);
+    }
+
+    // 显示帮助
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s", option->get_description().c_str());
+    }
+}
+
+void detail::ControlGenerator::render_checkbox(const CLI::Option* option) {
+    auto name = option->get_name();
+    auto& value = values_[name];
+
+    bool bool_val = (value == "true" || value == "1");
+    if (ImGui::Checkbox(name.c_str(), &bool_val)) {
+        value = bool_val ? "true" : "false";
+    }
+
+    // 显示帮助
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s", option->get_description().c_str());
+    }
+}
+
+void detail::ControlGenerator::render_slider(const CLI::Option* option) {
+    // TODO: 实现滑块控件
+}
+
+void detail::ControlGenerator::render_dropdown(const CLI::Option* option) {
+    // TODO: 实现下拉框控件
+}
+
+std::vector<std::string> detail::ControlGenerator::get_args() const {
+    std::vector<std::string> args;
+
+    for (const auto& pair : values_) {
+        if (!pair.second.empty()) {
+            args.push_back(pair.first);
+            args.push_back(pair.second);
+        }
+    }
+
+    for (const auto& pair : flags_) {
+        if (pair.second) {
+            args.push_back(pair.first);
+        }
+    }
+
+    return args;
 }
 
 // GUI implementation
@@ -296,6 +484,9 @@ bool GUI::initialize() {
     // Initialize backends
     ImGui_ImplGlfw_InitForOpenGL(window_, true);
     ImGui_ImplOpenGL3_Init("#version 130");
+
+    // 创建控件生成器
+    control_generator_ = std::make_unique<detail::ControlGenerator>(app_, config_);
 
     initialized_ = true;
     return true;
@@ -354,7 +545,10 @@ bool GUI::show() {
 }
 
 std::vector<std::string> GUI::get_args() const {
-    return args_;
+    if (control_generator_) {
+        return control_generator_->get_args();
+    }
+    return {};
 }
 
 void GUI::render() {
@@ -381,8 +575,9 @@ void GUI::render() {
 }
 
 void GUI::render_controls() {
-    // TODO: Implement control rendering
-    ImGui::Text("Controls will be here");
+    if (control_generator_) {
+        control_generator_->render();
+    }
 }
 
 void GUI::render_output() {
