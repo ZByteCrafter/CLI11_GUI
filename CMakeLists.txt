@@ -15,6 +15,9 @@ target_include_directories(cli11_gui INTERFACE
     $<INSTALL_INTERFACE:include>
 )
 
+# 查找 OpenGL
+find_package(OpenGL REQUIRED)
+
 # 依赖管理
 include(FetchContent)
 
@@ -58,7 +61,7 @@ target_include_directories(imgui_lib PUBLIC
 target_link_libraries(imgui_lib PUBLIC glfw)
 
 # 链接依赖
-target_link_libraries(cli11_gui INTERFACE CLI11::CLI11 imgui_lib)
+target_link_libraries(cli11_gui INTERFACE CLI11::CLI11 imgui_lib OpenGL::GL)
 
 # 示例
 if(CLI11_GUI_BUILD_EXAMPLES)
