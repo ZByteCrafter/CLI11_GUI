@@ -28,6 +28,13 @@
 #include <cstdlib>
 #include <atomic>
 
+// Platform-specific includes
+#ifdef _WIN32
+#include <direct.h>  // for _mkdir
+#else
+#include <sys/stat.h>  // for mkdir
+#endif
+
 // CLI11 dependency
 #include <CLI/CLI.hpp>
 
@@ -383,7 +390,6 @@ private:
     std::unique_ptr<detail::OutputBuffer> output_buffer_;
     std::unique_ptr<detail::CoutRedirect> cout_redirect_;
     std::unique_ptr<detail::ThemeManager> theme_manager_;
-    std::unique_ptr<detail::StateManager> state_manager_;
     std::unique_ptr<detail::LayoutManager> layout_manager_;
 };
 
@@ -499,7 +505,8 @@ inline void detail::ControlGenerator::render_option(const CLI::Option* option) {
         auto type_name = option->get_type_name();
 
         if (type_name == "int" || type_name == "float" || type_name == "double") {
-            render_number_input(option);
+            // 默认使用滑块控件
+            render_slider(option);
         } else if (type_name == "bool") {
             render_checkbox(option);
         } else {
@@ -612,40 +619,9 @@ inline void detail::ControlGenerator::render_slider(const CLI::Option* option) {
 }
 
 inline void detail::ControlGenerator::render_dropdown(const CLI::Option* option) {
-    auto name = option->get_name();
-    auto& value = values_[name];
-
-    // 获取当前值的索引
-    int current_index = 0;
-    std::vector<std::string> items = {"Option 1", "Option 2", "Option 3"};  // 默认选项
-
-    // 查找当前值的索引
-    for (size_t i = 0; i < items.size(); ++i) {
-        if (items[i] == value) {
-            current_index = static_cast<int>(i);
-            break;
-        }
-    }
-
-    // 渲染下拉框
-    if (ImGui::BeginCombo(name.c_str(), items[current_index].c_str())) {
-        for (size_t i = 0; i < items.size(); ++i) {
-            bool is_selected = (current_index == static_cast<int>(i));
-            if (ImGui::Selectable(items[i].c_str(), is_selected)) {
-                current_index = static_cast<int>(i);
-                value = items[i];
-            }
-            if (is_selected) {
-                ImGui::SetItemDefaultFocus();
-            }
-        }
-        ImGui::EndCombo();
-    }
-
-    // 显示帮助
-    if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip("%s", option->get_description().c_str());
-    }
+    // CLI11 不直接支持下拉框选项
+    // 回退到文本输入
+    render_text_input(option);
 }
 
 inline std::vector<std::string> detail::ControlGenerator::get_args() const {
@@ -999,7 +975,13 @@ inline std::string detail::StateManager::get_state_file_path() const {
 inline void detail::StateManager::save_to_file(const std::string& path) {
     // 创建目录
     auto dir = path.substr(0, path.find_last_of("/\\"));
-    // TODO: 创建目录
+    if (!dir.empty()) {
+#ifdef _WIN32
+        _mkdir(dir.c_str());
+#else
+        mkdir(dir.c_str(), 0755);
+#endif
+    }
     
     // 保存到文件
     std::ofstream file(path);
@@ -1028,6 +1010,10 @@ inline void detail::StateManager::load_from_file(const std::string& path) {
                 state_.width = std::stoi(line.substr(6));
             } else if (line.find("height=") == 0) {
                 state_.height = std::stoi(line.substr(7));
+            } else if (line.find("monitor=") == 0) {
+                state_.monitor_index = std::stoi(line.substr(8));
+            } else if (line.find("maximized=") == 0) {
+                state_.maximized = (line.substr(10) == "true");
             }
         }
     }
@@ -1106,20 +1092,18 @@ inline bool GUI::initialize() {
         cout_redirect_ = std::make_unique<detail::CoutRedirect>(*output_buffer_);
     }
 
-    // 初始化状态管理器
-    state_manager_ = std::make_unique<detail::StateManager>();
-    state_manager_->load();
+    // 初始化全局状态管理器（只创建一次）
+    if (!g_state_manager) {
+        g_state_manager = std::make_unique<detail::StateManager>();
+    }
+    g_state_manager->load();
     
     // 恢复窗口位置
-    if (state_manager_->is_loaded() && config_.remember_position) {
-        auto state = state_manager_->get_state();
+    if (g_state_manager->is_loaded() && config_.remember_position) {
+        auto state = g_state_manager->get_state();
         glfwSetWindowPos(window_, state.x, state.y);
         glfwSetWindowSize(window_, state.width, state.height);
     }
-
-    // 初始化全局状态管理器
-    g_state_manager = std::make_unique<detail::StateManager>();
-    g_state_manager->load();
 
     initialized_ = true;
     return true;
@@ -1128,12 +1112,12 @@ inline bool GUI::initialize() {
 inline void GUI::cleanup() {
     if (initialized_) {
         // 保存窗口状态
-        if (state_manager_ && config_.remember_position) {
+        if (g_state_manager && config_.remember_position) {
             WindowState state;
             glfwGetWindowPos(window_, &state.x, &state.y);
             glfwGetWindowSize(window_, &state.width, &state.height);
-            state_manager_->set_state(state);
-            state_manager_->save();
+            g_state_manager->set_state(state);
+            g_state_manager->save();
         }
 
         cout_redirect_.reset();
