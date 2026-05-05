@@ -132,18 +132,60 @@ constexpr int version_patch() {
     return CLI11_GUI_VERSION_PATCH;
 }
 
-// 声明 API
+// 内部实现
+namespace detail {
+
+// 检测配置是否支持 GUI 触发
+inline bool should_show_gui_impl(const Config& config) {
+    switch (config.trigger_mode) {
+        case TriggerMode::NoArgs:
+            return true;
+        case TriggerMode::ExplicitFlag:
+            return false;
+        case TriggerMode::Combined:
+            return true;
+        default:
+            return false;
+    }
+}
+
+// 检测是否有命令行参数
+inline bool has_command_line_args(int argc, char** argv) {
+    return argc > 1;
+}
+
+} // namespace detail
+
+// 运行 API
 inline void run(CLI::App& app) {
-    // TODO: 实现 GUI 运行逻辑
+    Config config;
+    run(app, config);
 }
 
 inline void run(CLI::App& app, const Config& config) {
-    // TODO: 使用配置运行 GUI
+    int argc = 0;
+    char** argv = nullptr;
+
+    bool show_gui = false;
+
+    if (config.trigger_mode == TriggerMode::NoArgs) {
+        show_gui = !detail::has_command_line_args(argc, argv);
+    }
+
+    if (show_gui) {
+        // TODO: 实现 GUI 显示
+    } else {
+        try {
+            app.parse(argc, argv);
+        } catch (const CLI::ParseError& e) {
+            exit(app.exit(e));
+        }
+    }
 }
 
 inline bool should_show_gui() {
-    // TODO: 实现判断逻辑
-    return false;
+    Config config;
+    return detail::should_show_gui_impl(config);
 }
 
 // 日志 API
