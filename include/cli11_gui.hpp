@@ -23,6 +23,9 @@
 #include <memory>
 #include <iostream>
 #include <sstream>
+#include <fstream>
+#include <cstdio>
+#include <cstdlib>
 
 // CLI11 dependency
 #include <CLI/CLI.hpp>
@@ -89,6 +92,17 @@ enum class TriggerMode {
     InvalidArgs,
     ExplicitFlag,
     Combined
+};
+
+// Window state struct
+struct WindowState {
+    int x = 0;
+    int y = 0;
+    int width = 800;
+    int height = 600;
+    int monitor_index = 0;
+    bool maximized = false;
+    bool minimized = false;
 };
 
 // Config struct
@@ -252,6 +266,43 @@ private:
     Theme current_theme_ = Theme::System;
 };
 
+// 状态管理器
+class StateManager {
+public:
+    StateManager();
+    
+    // 保存状态
+    void save();
+    
+    // 加载状态
+    void load();
+    
+    // 重置状态
+    void reset();
+    
+    // 检查状态是否存在
+    bool exists() const;
+    
+    // 获取状态
+    const WindowState& get_state() const;
+    
+    // 设置状态
+    void set_state(const WindowState& state);
+    
+private:
+    // 获取状态文件路径
+    std::string get_state_file_path() const;
+    
+    // 保存到文件
+    void save_to_file(const std::string& path);
+    
+    // 从文件加载
+    void load_from_file(const std::string& path);
+    
+    WindowState state_;
+    bool has_state_ = false;
+};
+
 } // namespace detail
 
 // Forward declarations for run API
@@ -299,6 +350,7 @@ private:
     std::unique_ptr<detail::OutputBuffer> output_buffer_;
     std::unique_ptr<detail::CoutRedirect> cout_redirect_;
     std::unique_ptr<detail::ThemeManager> theme_manager_;
+    std::unique_ptr<detail::StateManager> state_manager_;
 };
 
 // Run API (implemented at end of file after GUI class)
@@ -309,6 +361,9 @@ inline bool should_show_gui() {
 
 // 全局输出缓冲区
 static detail::OutputBuffer* g_output_buffer = nullptr;
+
+// 全局状态管理器
+static std::unique_ptr<detail::StateManager> g_state_manager;
 
 // Log API
 inline void log_debug(const std::string& message) {
@@ -343,19 +398,27 @@ inline void log_success(const std::string& message) {
 
 // State API
 inline void save_state() {
-    // TODO: Implement state save
+    if (g_state_manager) {
+        g_state_manager->save();
+    }
 }
 
 inline void load_state() {
-    // TODO: Implement state load
+    if (g_state_manager) {
+        g_state_manager->load();
+    }
 }
 
 inline void reset_state() {
-    // TODO: Implement state reset
+    if (g_state_manager) {
+        g_state_manager->reset();
+    }
 }
 
 inline bool has_state() {
-    // TODO: Implement state check
+    if (g_state_manager) {
+        return g_state_manager->exists();
+    }
     return false;
 }
 
@@ -650,6 +713,99 @@ bool detail::ThemeManager::is_system_dark_mode() const {
 #endif
 }
 
+// StateManager implementation
+detail::StateManager::StateManager() = default;
+
+void detail::StateManager::save() {
+    auto path = get_state_file_path();
+    save_to_file(path);
+}
+
+void detail::StateManager::load() {
+    auto path = get_state_file_path();
+    if (std::ifstream(path).good()) {
+        load_from_file(path);
+        has_state_ = true;
+    }
+}
+
+void detail::StateManager::reset() {
+    state_ = WindowState{};
+    has_state_ = false;
+    
+    // 删除状态文件
+    auto path = get_state_file_path();
+    std::remove(path.c_str());
+}
+
+bool detail::StateManager::exists() const {
+    return has_state_;
+}
+
+const WindowState& detail::StateManager::get_state() const {
+    return state_;
+}
+
+void detail::StateManager::set_state(const WindowState& state) {
+    state_ = state;
+}
+
+std::string detail::StateManager::get_state_file_path() const {
+#ifdef _WIN32
+    char* appdata = nullptr;
+    size_t len = 0;
+    _dupenv_s(&appdata, &len, "APPDATA");
+    std::string path = appdata ? appdata : "";
+    free(appdata);
+    return path + "\\CLI11_GUI\\state.ini";
+#elif __APPLE__
+    char* home = getenv("HOME");
+    std::string path = home ? home : "";
+    return path + "/Library/Application Support/CLI11_GUI/state.ini";
+#else
+    char* home = getenv("HOME");
+    std::string path = home ? home : "";
+    return path + "/.config/CLI11_GUI/state.ini";
+#endif
+}
+
+void detail::StateManager::save_to_file(const std::string& path) {
+    // 创建目录
+    auto dir = path.substr(0, path.find_last_of("/\\"));
+    // TODO: 创建目录
+    
+    // 保存到文件
+    std::ofstream file(path);
+    if (file.is_open()) {
+        file << "[window]\n";
+        file << "x=" << state_.x << "\n";
+        file << "y=" << state_.y << "\n";
+        file << "width=" << state_.width << "\n";
+        file << "height=" << state_.height << "\n";
+        file << "monitor=" << state_.monitor_index << "\n";
+        file << "maximized=" << (state_.maximized ? "true" : "false") << "\n";
+    }
+}
+
+void detail::StateManager::load_from_file(const std::string& path) {
+    std::ifstream file(path);
+    if (file.is_open()) {
+        std::string line;
+        while (std::getline(file, line)) {
+            // 简单的 INI 解析
+            if (line.find("x=") == 0) {
+                state_.x = std::stoi(line.substr(2));
+            } else if (line.find("y=") == 0) {
+                state_.y = std::stoi(line.substr(2));
+            } else if (line.find("width=") == 0) {
+                state_.width = std::stoi(line.substr(6));
+            } else if (line.find("height=") == 0) {
+                state_.height = std::stoi(line.substr(7));
+            }
+        }
+    }
+}
+
 // GUI implementation
 GUI::GUI(const CLI::App& app, const Config& config)
     : app_(app), config_(config) {
@@ -720,12 +876,36 @@ bool GUI::initialize() {
         cout_redirect_ = std::make_unique<detail::CoutRedirect>(*output_buffer_);
     }
 
+    // 初始化状态管理器
+    state_manager_ = std::make_unique<detail::StateManager>();
+    state_manager_->load();
+    
+    // 恢复窗口位置
+    if (state_manager_->exists() && config_.remember_position) {
+        auto state = state_manager_->get_state();
+        glfwSetWindowPos(window_, state.x, state.y);
+        glfwSetWindowSize(window_, state.width, state.height);
+    }
+
+    // 初始化全局状态管理器
+    g_state_manager = std::make_unique<detail::StateManager>();
+    g_state_manager->load();
+
     initialized_ = true;
     return true;
 }
 
 void GUI::cleanup() {
     if (initialized_) {
+        // 保存窗口状态
+        if (state_manager_ && config_.remember_position) {
+            WindowState state;
+            glfwGetWindowPos(window_, &state.x, &state.y);
+            glfwGetWindowSize(window_, &state.width, &state.height);
+            state_manager_->set_state(state);
+            state_manager_->save();
+        }
+
         cout_redirect_.reset();
         g_output_buffer = nullptr;
         output_buffer_.reset();
