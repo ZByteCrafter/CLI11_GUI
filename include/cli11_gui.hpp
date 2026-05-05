@@ -85,6 +85,36 @@ enum class TriggerMode {
     Combined
 };
 
+// 配置结构
+struct Config {
+    // 窗口配置
+    std::string window_title = "";
+    int window_width = 800;
+    int window_height = 600;
+    bool resizable = true;
+    bool remember_position = true;
+    
+    // 布局配置
+    LayoutMode layout_mode = LayoutMode::Auto;
+    
+    // 主题配置
+    Theme theme = Theme::System;
+    
+    // 输出配置
+    bool redirect_cout = true;
+    bool show_timestamps = true;
+    bool auto_scroll = true;
+    
+    // 验证配置
+    ValidationMode validation_mode = ValidationMode::OnSubmit;
+    
+    // 触发配置
+    TriggerMode trigger_mode = TriggerMode::NoArgs;
+    
+    // 测试配置
+    bool simulation_mode = false;
+};
+
 // 版本 API
 constexpr const char* version() {
     return CLI11_GUI_VERSION;
