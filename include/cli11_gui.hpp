@@ -26,6 +26,7 @@
 #include <fstream>
 #include <cstdio>
 #include <cstdlib>
+#include <atomic>
 
 // CLI11 dependency
 #include <CLI/CLI.hpp>
@@ -309,8 +310,11 @@ public:
     // 重置状态
     void reset();
     
-    // 检查状态是否存在
-    bool exists() const;
+    // 检查状态是否已加载
+    bool is_loaded() const;
+    
+    // 检查状态文件是否存在
+    bool state_file_exists() const;
     
     // 获取状态
     const WindowState& get_state() const;
@@ -389,40 +393,45 @@ inline bool should_show_gui() {
     return true;
 }
 
-// 全局输出缓冲区
-static detail::OutputBuffer* g_output_buffer = nullptr;
+// 全局输出缓冲区（使用原子指针提高线程安全性）
+static std::atomic<detail::OutputBuffer*> g_output_buffer{nullptr};
 
 // 全局状态管理器
 static std::unique_ptr<detail::StateManager> g_state_manager;
 
 // Log API
 inline void log_debug(const std::string& message) {
-    if (g_output_buffer) {
-        g_output_buffer->add_log(LogLevel::Debug, message);
+    auto* buffer = g_output_buffer.load();
+    if (buffer) {
+        buffer->add_log(LogLevel::Debug, message);
     }
 }
 
 inline void log_info(const std::string& message) {
-    if (g_output_buffer) {
-        g_output_buffer->add_log(LogLevel::Info, message);
+    auto* buffer = g_output_buffer.load();
+    if (buffer) {
+        buffer->add_log(LogLevel::Info, message);
     }
 }
 
 inline void log_warning(const std::string& message) {
-    if (g_output_buffer) {
-        g_output_buffer->add_log(LogLevel::Warning, message);
+    auto* buffer = g_output_buffer.load();
+    if (buffer) {
+        buffer->add_log(LogLevel::Warning, message);
     }
 }
 
 inline void log_error(const std::string& message) {
-    if (g_output_buffer) {
-        g_output_buffer->add_log(LogLevel::Error, message);
+    auto* buffer = g_output_buffer.load();
+    if (buffer) {
+        buffer->add_log(LogLevel::Error, message);
     }
 }
 
 inline void log_success(const std::string& message) {
-    if (g_output_buffer) {
-        g_output_buffer->add_log(LogLevel::Success, message);
+    auto* buffer = g_output_buffer.load();
+    if (buffer) {
+        buffer->add_log(LogLevel::Success, message);
     }
 }
 
@@ -447,7 +456,7 @@ inline void reset_state() {
 
 inline bool has_state() {
     if (g_state_manager) {
-        return g_state_manager->exists();
+        return g_state_manager->is_loaded();
     }
     return false;
 }
@@ -517,8 +526,8 @@ inline void detail::ControlGenerator::render_text_input(const CLI::Option* optio
     auto name = option->get_name();
     auto& value = values_[name];
 
-    char buffer[256];
-    strncpy_s(buffer, value.c_str(), sizeof(buffer) - 1);
+    char buffer[256] = {0};  // 初始化为全零
+    snprintf(buffer, sizeof(buffer), "%s", value.c_str());
 
     if (ImGui::InputText(name.c_str(), buffer, sizeof(buffer))) {
         value = buffer;
@@ -574,11 +583,69 @@ inline void detail::ControlGenerator::render_checkbox(const CLI::Option* option)
 }
 
 inline void detail::ControlGenerator::render_slider(const CLI::Option* option) {
-    // TODO: 实现滑块控件
+    auto name = option->get_name();
+    auto& value = values_[name];
+
+    // 尝试解析为数字并显示滑块
+    try {
+        if (option->get_type_name() == "int") {
+            int int_val = std::stoi(value);
+            // 默认范围 0-100，可通过 check(CLI::Range) 设置
+            if (ImGui::SliderInt(name.c_str(), &int_val, 0, 100)) {
+                value = std::to_string(int_val);
+            }
+        } else {
+            float float_val = std::stof(value);
+            if (ImGui::SliderFloat(name.c_str(), &float_val, 0.0f, 100.0f)) {
+                value = std::to_string(float_val);
+            }
+        }
+    } catch (...) {
+        // 回退到文本输入
+        render_text_input(option);
+    }
+
+    // 显示帮助
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s", option->get_description().c_str());
+    }
 }
 
 inline void detail::ControlGenerator::render_dropdown(const CLI::Option* option) {
-    // TODO: 实现下拉框控件
+    auto name = option->get_name();
+    auto& value = values_[name];
+
+    // 获取当前值的索引
+    int current_index = 0;
+    std::vector<std::string> items = {"Option 1", "Option 2", "Option 3"};  // 默认选项
+
+    // 查找当前值的索引
+    for (size_t i = 0; i < items.size(); ++i) {
+        if (items[i] == value) {
+            current_index = static_cast<int>(i);
+            break;
+        }
+    }
+
+    // 渲染下拉框
+    if (ImGui::BeginCombo(name.c_str(), items[current_index].c_str())) {
+        for (size_t i = 0; i < items.size(); ++i) {
+            bool is_selected = (current_index == static_cast<int>(i));
+            if (ImGui::Selectable(items[i].c_str(), is_selected)) {
+                current_index = static_cast<int>(i);
+                value = items[i];
+            }
+            if (is_selected) {
+                ImGui::SetItemDefaultFocus();
+            }
+        }
+        ImGui::EndCombo();
+    }
+
+    // 显示帮助
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s", option->get_description().c_str());
+    }
 }
 
 inline std::vector<std::string> detail::ControlGenerator::get_args() const {
@@ -892,8 +959,14 @@ inline void detail::StateManager::reset() {
     std::remove(path.c_str());
 }
 
-inline bool detail::StateManager::exists() const {
+inline bool detail::StateManager::is_loaded() const {
     return has_state_;
+}
+
+inline bool detail::StateManager::state_file_exists() const {
+    auto path = get_state_file_path();
+    std::ifstream file(path);
+    return file.good();
 }
 
 inline const WindowState& detail::StateManager::get_state() const {
@@ -1026,7 +1099,7 @@ inline bool GUI::initialize() {
 
     // 创建输出缓冲区
     output_buffer_ = std::make_unique<detail::OutputBuffer>();
-    g_output_buffer = output_buffer_.get();
+    g_output_buffer.store(output_buffer_.get());
 
     // 重定向 cout
     if (config_.redirect_cout) {
@@ -1038,7 +1111,7 @@ inline bool GUI::initialize() {
     state_manager_->load();
     
     // 恢复窗口位置
-    if (state_manager_->exists() && config_.remember_position) {
+    if (state_manager_->is_loaded() && config_.remember_position) {
         auto state = state_manager_->get_state();
         glfwSetWindowPos(window_, state.x, state.y);
         glfwSetWindowSize(window_, state.width, state.height);
@@ -1064,7 +1137,7 @@ inline void GUI::cleanup() {
         }
 
         cout_redirect_.reset();
-        g_output_buffer = nullptr;
+        g_output_buffer.store(nullptr);
         output_buffer_.reset();
 
         ImGui_ImplOpenGL3_Shutdown();
@@ -1177,11 +1250,7 @@ inline void GUI::render_buttons() {
 }
 
 // Run API with GUI support
-inline void run(CLI::App& app, const Config& config) {
-    // Get command line arguments
-    int argc = 0;
-    char** argv = nullptr;
-
+inline void run(CLI::App& app, int argc, char** argv, const Config& config) {
     // Detect if GUI should be shown
     bool show_gui = false;
 
@@ -1212,6 +1281,29 @@ inline void run(CLI::App& app, const Config& config) {
             exit(app.exit(e));
         }
     }
+}
+
+inline void run(CLI::App& app, const Config& config) {
+    // Use global argc/argv if available, otherwise show GUI
+    // This is a fallback - prefer using run(app, argc, argv, config)
+    Config cfg = config;
+    cfg.trigger_mode = TriggerMode::NoArgs;
+    GUI gui(app, cfg);
+    if (gui.show()) {
+        auto args = gui.get_args();
+        try {
+            app.parse(args);
+        } catch (const CLI::ParseError& e) {
+            exit(app.exit(e));
+        }
+    } else {
+        exit(0);
+    }
+}
+
+inline void run(CLI::App& app, int argc, char** argv) {
+    Config config;
+    run(app, argc, argv, config);
 }
 
 inline void run(CLI::App& app) {

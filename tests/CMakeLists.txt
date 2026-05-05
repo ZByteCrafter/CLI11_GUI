@@ -12,9 +12,9 @@ add_executable(cli11_gui_tests
 )
 
 target_link_libraries(cli11_gui_tests PRIVATE
-    cli11_gui
     Catch2::Catch2WithMain
 )
+cli11_gui_link_libraries(cli11_gui_tests)
 
 include(Catch)
 catch_discover_tests(cli11_gui_tests)

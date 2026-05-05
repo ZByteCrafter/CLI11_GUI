@@ -8,13 +8,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 option(CLI11_GUI_BUILD_EXAMPLES "Build examples" ON)
 option(CLI11_GUI_BUILD_TESTS "Build tests" ON)
 
-# 头文件库
-add_library(cli11_gui INTERFACE)
-target_include_directories(cli11_gui INTERFACE
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<INSTALL_INTERFACE:include>
-)
-
 # 查找 OpenGL
 find_package(OpenGL REQUIRED)
 
@@ -60,8 +53,18 @@ target_include_directories(imgui_lib PUBLIC
 )
 target_link_libraries(imgui_lib PUBLIC glfw)
 
-# 链接依赖
-target_link_libraries(cli11_gui INTERFACE CLI11::CLI11 imgui_lib OpenGL::GL)
+# 头文件库（INTERFACE 库只能链接其他 INTERFACE 库）
+add_library(cli11_gui INTERFACE)
+target_include_directories(cli11_gui INTERFACE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
+target_link_libraries(cli11_gui INTERFACE CLI11::CLI11 OpenGL::GL)
+
+# 创建一个辅助函数来链接所有依赖
+function(cli11_gui_link_libraries target)
+    target_link_libraries(${target} PRIVATE cli11_gui imgui_lib)
+endfunction()
 
 # 示例
 if(CLI11_GUI_BUILD_EXAMPLES)
