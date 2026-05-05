@@ -225,6 +225,33 @@ private:
     std::ostringstream captured_;
 };
 
+// 主题管理器
+class ThemeManager {
+public:
+    ThemeManager();
+    
+    // 应用主题
+    void apply_theme(Theme theme);
+    
+    // 获取当前主题
+    Theme get_current_theme() const;
+    
+private:
+    // 应用浅色主题
+    void apply_light_theme();
+    
+    // 应用深色主题
+    void apply_dark_theme();
+    
+    // 应用系统主题
+    void apply_system_theme();
+    
+    // 检测系统主题
+    bool is_system_dark_mode() const;
+    
+    Theme current_theme_ = Theme::System;
+};
+
 } // namespace detail
 
 // Forward declarations for run API
@@ -271,6 +298,7 @@ private:
     std::unique_ptr<detail::ControlGenerator> control_generator_;
     std::unique_ptr<detail::OutputBuffer> output_buffer_;
     std::unique_ptr<detail::CoutRedirect> cout_redirect_;
+    std::unique_ptr<detail::ThemeManager> theme_manager_;
 };
 
 // Run API (implemented at end of file after GUI class)
@@ -555,6 +583,73 @@ detail::CoutRedirect::~CoutRedirect() {
     }
 }
 
+// ThemeManager implementation
+detail::ThemeManager::ThemeManager() = default;
+
+void detail::ThemeManager::apply_theme(Theme theme) {
+    current_theme_ = theme;
+    
+    switch (theme) {
+        case Theme::Light:
+            apply_light_theme();
+            break;
+        case Theme::Dark:
+            apply_dark_theme();
+            break;
+        case Theme::System:
+            apply_system_theme();
+            break;
+    }
+}
+
+Theme detail::ThemeManager::get_current_theme() const {
+    return current_theme_;
+}
+
+void detail::ThemeManager::apply_light_theme() {
+    ImGui::StyleColorsLight();
+    
+    // 自定义样式
+    ImGuiStyle& style = ImGui::GetStyle();
+    style.WindowRounding = 4.0f;
+    style.FrameRounding = 2.0f;
+    style.GrabRounding = 2.0f;
+}
+
+void detail::ThemeManager::apply_dark_theme() {
+    ImGui::StyleColorsDark();
+    
+    // 自定义样式
+    ImGuiStyle& style = ImGui::GetStyle();
+    style.WindowRounding = 4.0f;
+    style.FrameRounding = 2.0f;
+    style.GrabRounding = 2.0f;
+}
+
+void detail::ThemeManager::apply_system_theme() {
+    if (is_system_dark_mode()) {
+        apply_dark_theme();
+    } else {
+        apply_light_theme();
+    }
+}
+
+bool detail::ThemeManager::is_system_dark_mode() const {
+#ifdef _WIN32
+    // Windows: 检查注册表
+    // TODO: 实现 Windows 深色模式检测
+    return false;
+#elif __APPLE__
+    // macOS: 检查系统偏好设置
+    // TODO: 实现 macOS 深色模式检测
+    return false;
+#else
+    // Linux: 检查 GTK 主题
+    // TODO: 实现 Linux 深色模式检测
+    return false;
+#endif
+}
+
 // GUI implementation
 GUI::GUI(const CLI::App& app, const Config& config)
     : app_(app), config_(config) {
@@ -603,11 +698,15 @@ bool GUI::initialize() {
     (void)io;
 
     // Setup style
-    ImGui::StyleColorsDark();
+    // Theme manager will apply the appropriate theme
 
     // Initialize backends
     ImGui_ImplGlfw_InitForOpenGL(window_, true);
     ImGui_ImplOpenGL3_Init("#version 130");
+
+    // 初始化主题管理器
+    theme_manager_ = std::make_unique<detail::ThemeManager>();
+    theme_manager_->apply_theme(config_.theme);
 
     // 创建控件生成器
     control_generator_ = std::make_unique<detail::ControlGenerator>(app_, config_);
