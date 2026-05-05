@@ -266,6 +266,35 @@ private:
     Theme current_theme_ = Theme::System;
 };
 
+// 布局管理器
+class LayoutManager {
+public:
+    LayoutManager(const CLI::App& app, Config& config);
+
+    // 选择布局模式
+    LayoutMode select_layout_mode();
+
+    // 渲染布局
+    void render();
+
+private:
+    // 渲染平铺布局
+    void render_flat();
+
+    // 渲染标签页布局
+    void render_tabs();
+
+    // 渲染向导布局
+    void render_wizard();
+
+    // 渲染可折叠布局
+    void render_collapsible();
+
+    const CLI::App& app_;
+    Config& config_;
+    int wizard_step_ = 0;
+};
+
 // 状态管理器
 class StateManager {
 public:
@@ -351,6 +380,7 @@ private:
     std::unique_ptr<detail::CoutRedirect> cout_redirect_;
     std::unique_ptr<detail::ThemeManager> theme_manager_;
     std::unique_ptr<detail::StateManager> state_manager_;
+    std::unique_ptr<detail::LayoutManager> layout_manager_;
 };
 
 // Run API (implemented at end of file after GUI class)
@@ -713,6 +743,130 @@ bool detail::ThemeManager::is_system_dark_mode() const {
 #endif
 }
 
+// LayoutManager implementation
+detail::LayoutManager::LayoutManager(const CLI::App& app, Config& config)
+    : app_(app), config_(config) {}
+
+LayoutMode detail::LayoutManager::select_layout_mode() {
+    if (config_.layout_mode != LayoutMode::Auto) {
+        return config_.layout_mode;
+    }
+
+    // 自动选择布局模式
+    auto subcommands = app_.get_subcommands({});
+
+    if (subcommands.empty()) {
+        return LayoutMode::Flat;
+    } else if (subcommands.size() <= 3) {
+        return LayoutMode::Tabs;
+    } else {
+        return LayoutMode::Collapsible;
+    }
+}
+
+void detail::LayoutManager::render() {
+    auto mode = select_layout_mode();
+
+    switch (mode) {
+        case LayoutMode::Flat:
+            render_flat();
+            break;
+        case LayoutMode::Tabs:
+            render_tabs();
+            break;
+        case LayoutMode::Wizard:
+            render_wizard();
+            break;
+        case LayoutMode::Collapsible:
+            render_collapsible();
+            break;
+        default:
+            render_flat();
+            break;
+    }
+}
+
+void detail::LayoutManager::render_flat() {
+    // 平铺布局：所有选项在一个窗口中
+    // 由 ControlGenerator 处理
+}
+
+void detail::LayoutManager::render_tabs() {
+    // 标签页布局
+    auto subcommands = app_.get_subcommands({});
+
+    if (ImGui::BeginTabBar("Subcommands")) {
+        // 全局选项标签页
+        if (ImGui::BeginTabItem("Global")) {
+            // 渲染全局选项
+            ImGui::EndTabItem();
+        }
+
+        // 子命令标签页
+        for (size_t i = 0; i < subcommands.size(); ++i) {
+            auto subcmd = subcommands[i];
+            if (ImGui::BeginTabItem(subcmd->get_name().c_str())) {
+                // 渲染子命令选项
+                ImGui::EndTabItem();
+            }
+        }
+
+        ImGui::EndTabBar();
+    }
+}
+
+void detail::LayoutManager::render_wizard() {
+    // 向导布局
+    auto subcommands = app_.get_subcommands({});
+
+    // 步骤指示
+    ImGui::Text("Step %d of %zu", wizard_step_ + 1, subcommands.size() + 1);
+    ImGui::Separator();
+
+    // 渲染当前步骤
+    if (wizard_step_ == 0) {
+        // 全局选项
+        ImGui::Text("Global Options");
+    } else if (wizard_step_ <= static_cast<int>(subcommands.size())) {
+        // 子命令选项
+        auto subcmd = subcommands[wizard_step_ - 1];
+        ImGui::Text("Subcommand: %s", subcmd->get_name().c_str());
+    }
+
+    ImGui::Separator();
+
+    // 导航按钮
+    if (wizard_step_ > 0) {
+        if (ImGui::Button("Previous")) {
+            wizard_step_--;
+        }
+        ImGui::SameLine();
+    }
+
+    if (wizard_step_ < static_cast<int>(subcommands.size())) {
+        if (ImGui::Button("Next")) {
+            wizard_step_++;
+        }
+    }
+}
+
+void detail::LayoutManager::render_collapsible() {
+    // 可折叠布局
+    auto subcommands = app_.get_subcommands({});
+
+    // 全局选项
+    if (ImGui::CollapsingHeader("Global Options", ImGuiTreeNodeFlags_DefaultOpen)) {
+        // 渲染全局选项
+    }
+
+    // 子命令选项
+    for (auto subcmd : subcommands) {
+        if (ImGui::CollapsingHeader(subcmd->get_name().c_str())) {
+            // 渲染子命令选项
+        }
+    }
+}
+
 // StateManager implementation
 detail::StateManager::StateManager() = default;
 
@@ -867,6 +1021,9 @@ bool GUI::initialize() {
     // 创建控件生成器
     control_generator_ = std::make_unique<detail::ControlGenerator>(app_, config_);
 
+    // 创建布局管理器
+    layout_manager_ = std::make_unique<detail::LayoutManager>(app_, config_);
+
     // 创建输出缓冲区
     output_buffer_ = std::make_unique<detail::OutputBuffer>();
     g_output_buffer = output_buffer_.get();
@@ -991,6 +1148,9 @@ void GUI::render() {
 }
 
 void GUI::render_controls() {
+    if (layout_manager_) {
+        layout_manager_->render();
+    }
     if (control_generator_) {
         control_generator_->render();
     }
