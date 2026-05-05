@@ -453,7 +453,7 @@ inline bool has_state() {
 }
 
 // ControlGenerator implementation
-detail::ControlGenerator::ControlGenerator(const CLI::App& app, Config& config)
+inline detail::ControlGenerator::ControlGenerator(const CLI::App& app, Config& config)
     : app_(app), config_(config) {
     // 初始化默认值
     for (const auto& option : app.get_options()) {
@@ -470,13 +470,13 @@ detail::ControlGenerator::ControlGenerator(const CLI::App& app, Config& config)
     }
 }
 
-void detail::ControlGenerator::render() {
+inline void detail::ControlGenerator::render() {
     for (const auto& option : app_.get_options()) {
         render_option(option);
     }
 }
 
-void detail::ControlGenerator::render_option(const CLI::Option* option) {
+inline void detail::ControlGenerator::render_option(const CLI::Option* option) {
     // 跳过帮助选项
     if (option->get_name() == "--help" || option->get_name() == "-h") {
         return;
@@ -499,7 +499,7 @@ void detail::ControlGenerator::render_option(const CLI::Option* option) {
     }
 }
 
-void detail::ControlGenerator::render_flag(const CLI::Option* option) {
+inline void detail::ControlGenerator::render_flag(const CLI::Option* option) {
     auto name = option->get_name();
     bool value = flags_[name];
 
@@ -513,7 +513,7 @@ void detail::ControlGenerator::render_flag(const CLI::Option* option) {
     }
 }
 
-void detail::ControlGenerator::render_text_input(const CLI::Option* option) {
+inline void detail::ControlGenerator::render_text_input(const CLI::Option* option) {
     auto name = option->get_name();
     auto& value = values_[name];
 
@@ -530,7 +530,7 @@ void detail::ControlGenerator::render_text_input(const CLI::Option* option) {
     }
 }
 
-void detail::ControlGenerator::render_number_input(const CLI::Option* option) {
+inline void detail::ControlGenerator::render_number_input(const CLI::Option* option) {
     auto name = option->get_name();
     auto& value = values_[name];
 
@@ -558,7 +558,7 @@ void detail::ControlGenerator::render_number_input(const CLI::Option* option) {
     }
 }
 
-void detail::ControlGenerator::render_checkbox(const CLI::Option* option) {
+inline void detail::ControlGenerator::render_checkbox(const CLI::Option* option) {
     auto name = option->get_name();
     auto& value = values_[name];
 
@@ -573,15 +573,15 @@ void detail::ControlGenerator::render_checkbox(const CLI::Option* option) {
     }
 }
 
-void detail::ControlGenerator::render_slider(const CLI::Option* option) {
+inline void detail::ControlGenerator::render_slider(const CLI::Option* option) {
     // TODO: 实现滑块控件
 }
 
-void detail::ControlGenerator::render_dropdown(const CLI::Option* option) {
+inline void detail::ControlGenerator::render_dropdown(const CLI::Option* option) {
     // TODO: 实现下拉框控件
 }
 
-std::vector<std::string> detail::ControlGenerator::get_args() const {
+inline std::vector<std::string> detail::ControlGenerator::get_args() const {
     std::vector<std::string> args;
 
     for (const auto& pair : values_) {
@@ -601,15 +601,15 @@ std::vector<std::string> detail::ControlGenerator::get_args() const {
 }
 
 // OutputBuffer implementation
-void detail::OutputBuffer::add_log(LogLevel level, const std::string& message) {
+inline void detail::OutputBuffer::add_log(LogLevel level, const std::string& message) {
     logs_.push_back({level, message});
 }
 
-void detail::OutputBuffer::clear() {
+inline void detail::OutputBuffer::clear() {
     logs_.clear();
 }
 
-void detail::OutputBuffer::render() {
+inline void detail::OutputBuffer::render() {
     ImGui::Separator();
     ImGui::Text("Output:");
 
@@ -655,18 +655,18 @@ void detail::OutputBuffer::render() {
     ImGui::EndChild();
 }
 
-const std::vector<std::pair<LogLevel, std::string>>& detail::OutputBuffer::get_logs() const {
+inline const std::vector<std::pair<LogLevel, std::string>>& detail::OutputBuffer::get_logs() const {
     return logs_;
 }
 
 // CoutRedirect implementation
-detail::CoutRedirect::CoutRedirect(OutputBuffer& buffer)
+inline detail::CoutRedirect::CoutRedirect(OutputBuffer& buffer)
     : buffer_(buffer), original_cout_(std::cout.rdbuf()), original_cerr_(std::cerr.rdbuf()) {
     std::cout.rdbuf(captured_.rdbuf());
     std::cerr.rdbuf(captured_.rdbuf());
 }
 
-detail::CoutRedirect::~CoutRedirect() {
+inline detail::CoutRedirect::~CoutRedirect() {
     std::cout.rdbuf(original_cout_);
     std::cerr.rdbuf(original_cerr_);
 
@@ -677,9 +677,9 @@ detail::CoutRedirect::~CoutRedirect() {
 }
 
 // ThemeManager implementation
-detail::ThemeManager::ThemeManager() = default;
+inline detail::ThemeManager::ThemeManager() = default;
 
-void detail::ThemeManager::apply_theme(Theme theme) {
+inline void detail::ThemeManager::apply_theme(Theme theme) {
     current_theme_ = theme;
     
     switch (theme) {
@@ -695,11 +695,11 @@ void detail::ThemeManager::apply_theme(Theme theme) {
     }
 }
 
-Theme detail::ThemeManager::get_current_theme() const {
+inline Theme detail::ThemeManager::get_current_theme() const {
     return current_theme_;
 }
 
-void detail::ThemeManager::apply_light_theme() {
+inline void detail::ThemeManager::apply_light_theme() {
     ImGui::StyleColorsLight();
     
     // 自定义样式
@@ -709,7 +709,7 @@ void detail::ThemeManager::apply_light_theme() {
     style.GrabRounding = 2.0f;
 }
 
-void detail::ThemeManager::apply_dark_theme() {
+inline void detail::ThemeManager::apply_dark_theme() {
     ImGui::StyleColorsDark();
     
     // 自定义样式
@@ -719,7 +719,7 @@ void detail::ThemeManager::apply_dark_theme() {
     style.GrabRounding = 2.0f;
 }
 
-void detail::ThemeManager::apply_system_theme() {
+inline void detail::ThemeManager::apply_system_theme() {
     if (is_system_dark_mode()) {
         apply_dark_theme();
     } else {
@@ -727,7 +727,7 @@ void detail::ThemeManager::apply_system_theme() {
     }
 }
 
-bool detail::ThemeManager::is_system_dark_mode() const {
+inline bool detail::ThemeManager::is_system_dark_mode() const {
 #ifdef _WIN32
     // Windows: 检查注册表
     // TODO: 实现 Windows 深色模式检测
@@ -744,10 +744,10 @@ bool detail::ThemeManager::is_system_dark_mode() const {
 }
 
 // LayoutManager implementation
-detail::LayoutManager::LayoutManager(const CLI::App& app, Config& config)
+inline detail::LayoutManager::LayoutManager(const CLI::App& app, Config& config)
     : app_(app), config_(config) {}
 
-LayoutMode detail::LayoutManager::select_layout_mode() {
+inline LayoutMode detail::LayoutManager::select_layout_mode() {
     if (config_.layout_mode != LayoutMode::Auto) {
         return config_.layout_mode;
     }
@@ -764,7 +764,7 @@ LayoutMode detail::LayoutManager::select_layout_mode() {
     }
 }
 
-void detail::LayoutManager::render() {
+inline void detail::LayoutManager::render() {
     auto mode = select_layout_mode();
 
     switch (mode) {
@@ -786,12 +786,12 @@ void detail::LayoutManager::render() {
     }
 }
 
-void detail::LayoutManager::render_flat() {
+inline void detail::LayoutManager::render_flat() {
     // 平铺布局：所有选项在一个窗口中
     // 由 ControlGenerator 处理
 }
 
-void detail::LayoutManager::render_tabs() {
+inline void detail::LayoutManager::render_tabs() {
     // 标签页布局
     auto subcommands = app_.get_subcommands({});
 
@@ -815,7 +815,7 @@ void detail::LayoutManager::render_tabs() {
     }
 }
 
-void detail::LayoutManager::render_wizard() {
+inline void detail::LayoutManager::render_wizard() {
     // 向导布局
     auto subcommands = app_.get_subcommands({});
 
@@ -850,7 +850,7 @@ void detail::LayoutManager::render_wizard() {
     }
 }
 
-void detail::LayoutManager::render_collapsible() {
+inline void detail::LayoutManager::render_collapsible() {
     // 可折叠布局
     auto subcommands = app_.get_subcommands({});
 
@@ -868,14 +868,14 @@ void detail::LayoutManager::render_collapsible() {
 }
 
 // StateManager implementation
-detail::StateManager::StateManager() = default;
+inline detail::StateManager::StateManager() = default;
 
-void detail::StateManager::save() {
+inline void detail::StateManager::save() {
     auto path = get_state_file_path();
     save_to_file(path);
 }
 
-void detail::StateManager::load() {
+inline void detail::StateManager::load() {
     auto path = get_state_file_path();
     if (std::ifstream(path).good()) {
         load_from_file(path);
@@ -883,7 +883,7 @@ void detail::StateManager::load() {
     }
 }
 
-void detail::StateManager::reset() {
+inline void detail::StateManager::reset() {
     state_ = WindowState{};
     has_state_ = false;
     
@@ -892,19 +892,19 @@ void detail::StateManager::reset() {
     std::remove(path.c_str());
 }
 
-bool detail::StateManager::exists() const {
+inline bool detail::StateManager::exists() const {
     return has_state_;
 }
 
-const WindowState& detail::StateManager::get_state() const {
+inline const WindowState& detail::StateManager::get_state() const {
     return state_;
 }
 
-void detail::StateManager::set_state(const WindowState& state) {
+inline void detail::StateManager::set_state(const WindowState& state) {
     state_ = state;
 }
 
-std::string detail::StateManager::get_state_file_path() const {
+inline std::string detail::StateManager::get_state_file_path() const {
 #ifdef _WIN32
     char* appdata = nullptr;
     size_t len = 0;
@@ -923,7 +923,7 @@ std::string detail::StateManager::get_state_file_path() const {
 #endif
 }
 
-void detail::StateManager::save_to_file(const std::string& path) {
+inline void detail::StateManager::save_to_file(const std::string& path) {
     // 创建目录
     auto dir = path.substr(0, path.find_last_of("/\\"));
     // TODO: 创建目录
@@ -941,7 +941,7 @@ void detail::StateManager::save_to_file(const std::string& path) {
     }
 }
 
-void detail::StateManager::load_from_file(const std::string& path) {
+inline void detail::StateManager::load_from_file(const std::string& path) {
     std::ifstream file(path);
     if (file.is_open()) {
         std::string line;
@@ -961,16 +961,16 @@ void detail::StateManager::load_from_file(const std::string& path) {
 }
 
 // GUI implementation
-GUI::GUI(const CLI::App& app, const Config& config)
+inline GUI::GUI(const CLI::App& app, const Config& config)
     : app_(app), config_(config) {
     // Delayed initialization
 }
 
-GUI::~GUI() {
+inline GUI::~GUI() {
     cleanup();
 }
 
-bool GUI::initialize() {
+inline bool GUI::initialize() {
     // Initialize GLFW
     if (!glfwInit()) {
         log_error("Failed to initialize GLFW");
@@ -1052,7 +1052,7 @@ bool GUI::initialize() {
     return true;
 }
 
-void GUI::cleanup() {
+inline void GUI::cleanup() {
     if (initialized_) {
         // 保存窗口状态
         if (state_manager_ && config_.remember_position) {
@@ -1080,7 +1080,7 @@ void GUI::cleanup() {
     }
 }
 
-bool GUI::show() {
+inline bool GUI::show() {
     if (!initialize()) {
         return false;
     }
@@ -1117,14 +1117,14 @@ bool GUI::show() {
     return should_run_;
 }
 
-std::vector<std::string> GUI::get_args() const {
+inline std::vector<std::string> GUI::get_args() const {
     if (control_generator_) {
         return control_generator_->get_args();
     }
     return {};
 }
 
-void GUI::render() {
+inline void GUI::render() {
     // Render main window
     ImGui::SetNextWindowPos(ImVec2(0, 0));
     ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize);
@@ -1147,7 +1147,7 @@ void GUI::render() {
     ImGui::End();
 }
 
-void GUI::render_controls() {
+inline void GUI::render_controls() {
     if (layout_manager_) {
         layout_manager_->render();
     }
@@ -1156,13 +1156,13 @@ void GUI::render_controls() {
     }
 }
 
-void GUI::render_output() {
+inline void GUI::render_output() {
     if (output_buffer_) {
         output_buffer_->render();
     }
 }
 
-void GUI::render_buttons() {
+inline void GUI::render_buttons() {
     ImGui::Separator();
 
     if (ImGui::Button("Run", ImVec2(120, 0))) {
