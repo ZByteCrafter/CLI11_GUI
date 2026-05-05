@@ -27,6 +27,12 @@
 // CLI11 dependency
 #include <CLI/CLI.hpp>
 
+// ImGui dependency
+#include <imgui.h>
+#include <imgui_impl_glfw.h>
+#include <imgui_impl_opengl3.h>
+#include <GLFW/glfw3.h>
+
 namespace CLI11_GUI {
 
 // Forward declarations
