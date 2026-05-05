@@ -192,6 +192,39 @@ private:
     std::map<std::string, bool> flags_;
 };
 
+// 输出缓冲区
+class OutputBuffer {
+public:
+    OutputBuffer() = default;
+    ~OutputBuffer() = default;
+
+    void add_log(LogLevel level, const std::string& message);
+    void clear();
+    void render();
+    const std::vector<std::pair<LogLevel, std::string>>& get_logs() const;
+
+private:
+    std::vector<std::pair<LogLevel, std::string>> logs_;
+    bool auto_scroll_ = true;
+    bool show_timestamps_ = true;
+};
+
+// 重定向 cout
+class CoutRedirect {
+public:
+    explicit CoutRedirect(OutputBuffer& buffer);
+    ~CoutRedirect();
+
+    CoutRedirect(const CoutRedirect&) = delete;
+    CoutRedirect& operator=(const CoutRedirect&) = delete;
+
+private:
+    OutputBuffer& buffer_;
+    std::streambuf* original_cout_;
+    std::streambuf* original_cerr_;
+    std::ostringstream captured_;
+};
+
 } // namespace detail
 
 // Forward declarations for run API
@@ -236,6 +269,8 @@ private:
     bool should_run_ = false;
     std::vector<std::string> args_;
     std::unique_ptr<detail::ControlGenerator> control_generator_;
+    std::unique_ptr<detail::OutputBuffer> output_buffer_;
+    std::unique_ptr<detail::CoutRedirect> cout_redirect_;
 };
 
 // Run API (implemented at end of file after GUI class)
@@ -244,25 +279,38 @@ inline bool should_show_gui() {
     return true;
 }
 
+// 全局输出缓冲区
+static detail::OutputBuffer* g_output_buffer = nullptr;
+
 // Log API
 inline void log_debug(const std::string& message) {
-    // TODO: Implement debug log
+    if (g_output_buffer) {
+        g_output_buffer->add_log(LogLevel::Debug, message);
+    }
 }
 
 inline void log_info(const std::string& message) {
-    // TODO: Implement info log
+    if (g_output_buffer) {
+        g_output_buffer->add_log(LogLevel::Info, message);
+    }
 }
 
 inline void log_warning(const std::string& message) {
-    // TODO: Implement warning log
+    if (g_output_buffer) {
+        g_output_buffer->add_log(LogLevel::Warning, message);
+    }
 }
 
 inline void log_error(const std::string& message) {
-    // TODO: Implement error log
+    if (g_output_buffer) {
+        g_output_buffer->add_log(LogLevel::Error, message);
+    }
 }
 
 inline void log_success(const std::string& message) {
-    // TODO: Implement success log
+    if (g_output_buffer) {
+        g_output_buffer->add_log(LogLevel::Success, message);
+    }
 }
 
 // State API
@@ -431,6 +479,82 @@ std::vector<std::string> detail::ControlGenerator::get_args() const {
     return args;
 }
 
+// OutputBuffer implementation
+void detail::OutputBuffer::add_log(LogLevel level, const std::string& message) {
+    logs_.push_back({level, message});
+}
+
+void detail::OutputBuffer::clear() {
+    logs_.clear();
+}
+
+void detail::OutputBuffer::render() {
+    ImGui::Separator();
+    ImGui::Text("Output:");
+
+    if (ImGui::Button("Clear")) {
+        clear();
+    }
+    ImGui::SameLine();
+    ImGui::Checkbox("Auto-scroll", &auto_scroll_);
+    ImGui::SameLine();
+    ImGui::Checkbox("Timestamps", &show_timestamps_);
+
+    ImGui::BeginChild("OutputRegion", ImVec2(0, 200), true);
+
+    for (const auto& log : logs_) {
+        ImVec4 color;
+        switch (log.first) {
+            case LogLevel::Debug:
+                color = ImVec4(0.5f, 0.5f, 0.5f, 1.0f);
+                break;
+            case LogLevel::Info:
+                color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
+                break;
+            case LogLevel::Warning:
+                color = ImVec4(1.0f, 1.0f, 0.0f, 1.0f);
+                break;
+            case LogLevel::Error:
+                color = ImVec4(1.0f, 0.0f, 0.0f, 1.0f);
+                break;
+            case LogLevel::Success:
+                color = ImVec4(0.0f, 1.0f, 0.0f, 1.0f);
+                break;
+        }
+
+        ImGui::PushStyleColor(ImGuiCol_Text, color);
+        ImGui::TextUnformatted(log.second.c_str());
+        ImGui::PopStyleColor();
+    }
+
+    if (auto_scroll_ && ImGui::GetScrollY() >= ImGui::GetScrollMaxY()) {
+        ImGui::SetScrollHereY(1.0f);
+    }
+
+    ImGui::EndChild();
+}
+
+const std::vector<std::pair<LogLevel, std::string>>& detail::OutputBuffer::get_logs() const {
+    return logs_;
+}
+
+// CoutRedirect implementation
+detail::CoutRedirect::CoutRedirect(OutputBuffer& buffer)
+    : buffer_(buffer), original_cout_(std::cout.rdbuf()), original_cerr_(std::cerr.rdbuf()) {
+    std::cout.rdbuf(captured_.rdbuf());
+    std::cerr.rdbuf(captured_.rdbuf());
+}
+
+detail::CoutRedirect::~CoutRedirect() {
+    std::cout.rdbuf(original_cout_);
+    std::cerr.rdbuf(original_cerr_);
+
+    auto content = captured_.str();
+    if (!content.empty()) {
+        buffer_.add_log(LogLevel::Info, content);
+    }
+}
+
 // GUI implementation
 GUI::GUI(const CLI::App& app, const Config& config)
     : app_(app), config_(config) {
@@ -488,12 +612,25 @@ bool GUI::initialize() {
     // 创建控件生成器
     control_generator_ = std::make_unique<detail::ControlGenerator>(app_, config_);
 
+    // 创建输出缓冲区
+    output_buffer_ = std::make_unique<detail::OutputBuffer>();
+    g_output_buffer = output_buffer_.get();
+
+    // 重定向 cout
+    if (config_.redirect_cout) {
+        cout_redirect_ = std::make_unique<detail::CoutRedirect>(*output_buffer_);
+    }
+
     initialized_ = true;
     return true;
 }
 
 void GUI::cleanup() {
     if (initialized_) {
+        cout_redirect_.reset();
+        g_output_buffer = nullptr;
+        output_buffer_.reset();
+
         ImGui_ImplOpenGL3_Shutdown();
         ImGui_ImplGlfw_Shutdown();
         ImGui::DestroyContext();
@@ -581,8 +718,9 @@ void GUI::render_controls() {
 }
 
 void GUI::render_output() {
-    // TODO: Implement output box rendering
-    ImGui::Text("Output will be here");
+    if (output_buffer_) {
+        output_buffer_->render();
+    }
 }
 
 void GUI::render_buttons() {
