@@ -31,7 +31,7 @@ namespace CLI11_GUI {
 
 // 前向声明
 class GUI;
-class Config;
+struct Config;
 class Simulation;
 
 // 枚举类型
@@ -103,21 +103,56 @@ constexpr int version_patch() {
 }
 
 // 声明 API
-void run(CLI::App& app);
-void run(CLI::App& app, const Config& config);
-bool should_show_gui();
+inline void run(CLI::App& app) {
+    // TODO: 实现 GUI 运行逻辑
+}
+
+inline void run(CLI::App& app, const Config& config) {
+    // TODO: 使用配置运行 GUI
+}
+
+inline bool should_show_gui() {
+    // TODO: 实现判断逻辑
+    return false;
+}
 
 // 日志 API
-void log_debug(const std::string& message);
-void log_info(const std::string& message);
-void log_warning(const std::string& message);
-void log_error(const std::string& message);
-void log_success(const std::string& message);
+inline void log_debug(const std::string& message) {
+    // TODO: 实现调试日志
+}
+
+inline void log_info(const std::string& message) {
+    // TODO: 实现信息日志
+}
+
+inline void log_warning(const std::string& message) {
+    // TODO: 实现警告日志
+}
+
+inline void log_error(const std::string& message) {
+    // TODO: 实现错误日志
+}
+
+inline void log_success(const std::string& message) {
+    // TODO: 实现成功日志
+}
 
 // 状态 API
-void save_state();
-void load_state();
-void reset_state();
-bool has_state();
+inline void save_state() {
+    // TODO: 实现状态保存
+}
+
+inline void load_state() {
+    // TODO: 实现状态加载
+}
+
+inline void reset_state() {
+    // TODO: 实现状态重置
+}
+
+inline bool has_state() {
+    // TODO: 实现状态检查
+    return false;
+}
 
 } // namespace CLI11_GUI
