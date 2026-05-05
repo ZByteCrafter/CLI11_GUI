@@ -2,7 +2,7 @@
 #include <cassert>
 
 int main() {
-    // 测试无参数情况
+    // Test should_show_gui() - no args, always returns true
     assert(CLI11_GUI::should_show_gui() == true);
 
     return 0;

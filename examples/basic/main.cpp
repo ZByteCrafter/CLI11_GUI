@@ -14,8 +14,8 @@ int main(int argc, char** argv) {
     bool verbose = false;
     app.add_flag("--verbose", verbose, "Enable verbose output");
     
-    // CLI11_GUI 会自动检测是否有命令行参数
-    // 无参数时显示 GUI，有参数时正常解析
+    // CLI11_GUI will auto-detect command line arguments
+    // Show GUI when no args, parse normally with args
     CLI11_GUI::run(app);
     
     std::cout << "Host: " << host << std::endl;
